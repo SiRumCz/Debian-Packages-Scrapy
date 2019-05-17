@@ -17,7 +17,6 @@ class DebianSpider(scrapy.Spider):
 	def parse(self, response):
 		conn = self.create_connection('debianpkgs.db')
 		c = conn.cursor()
-		
 		# create table if not exists
 		c.execute(
 			'''
@@ -29,7 +28,8 @@ class DebianSpider(scrapy.Spider):
 			)
 			'''
 		)
-		
+		# delete any data from packages table
+		c.execute(''' DELETE FROM packages ''')
 		# query for insertion
 		insert_query = ''' INSERT INTO packages(packageid, name, link, version) VALUES(?, ?, ?, ?) '''
 		
@@ -55,7 +55,7 @@ class DebianSpider(scrapy.Spider):
 		try:
 			conn = sqlite3.connect(db_file)
 			return conn
-		except Error as e:
-			print(e)
+		except:
+			print('Oops, DB connection failed...')
  
 		return None
