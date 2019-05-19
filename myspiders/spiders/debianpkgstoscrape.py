@@ -1,3 +1,6 @@
+# Author: Chen, Zhe
+# Email: zkchen@uvic.ca
+#
 # use scrapy to generate a list of packages in Debian GNU/Linux stable version
 # scrape items include:
 # package name, link in tracker.debian.org/pkg, VCS(Version Control Systems) link, version
@@ -25,7 +28,7 @@ class DebianSpider(scrapy.Spider):
 			pkg_item['packageid'] = pkg_id
 			pkg_item['trackerlink'] = None
 			pkg_item['vcslink'] = None
-			
+
 			pkg_id += 1
 			pkg_link = package.css('a').attrib['href']
 
