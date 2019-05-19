@@ -21,7 +21,7 @@ class DebianSpider(scrapy.Spider):
 
 	# initial scrapy parse	
 	def parse(self, response):
-		pkg_id = 0
+		pkg_id = 1
 		for package in response.css('dt'):
 			pkg_item = items.Package()
 			pkg_item['name'] = package.css('a::text').get()			
