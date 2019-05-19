@@ -1,11 +1,13 @@
-# use scrapy to generate a list of packages in 
-# Debian GNU/Linux stable version
+# use scrapy to generate a list of packages in Debian GNU/Linux stable version
+# scrape items include:
+# package name, link in tracker.debian.org/pkg, VCS(Version Control Systems) link, version
 
-import scrapy, sqlite3
+import scrapy
+from .. import items
 
 class DebianSpider(scrapy.Spider):
 	name = 'debianpackages'
-	
+
 	def  start_requests(self):
 		urls = [
 			"https://packages.debian.org/stable/allpackages"
@@ -13,49 +15,46 @@ class DebianSpider(scrapy.Spider):
 		
 		for url in urls:
 			yield scrapy.Request(url=url, callback=self.parse)
-			
+
+	# initial scrapy parse	
 	def parse(self, response):
-		conn = self.create_connection('debianpkgs.db')
-		c = conn.cursor()
-		# create table if not exists
-		c.execute(
-			'''
-			CREATE TABLE IF NOT EXISTS packages (
-			packageid int primary key not null,
-			name text,
-			link text,
-			version text
-			)
-			'''
-		)
-		# delete any data from packages table
-		c.execute(''' DELETE FROM packages ''')
-		# query for insertion
-		insert_query = ''' INSERT INTO packages(packageid, name, link, version) VALUES(?, ?, ?, ?) '''
-		
 		pkg_id = 0
 		for package in response.css('dt'):
 			pkg_id += 1
 			pkg_name = package.css('a::text').get()
 			pkg_link = 'https://packages.debian.org/stable/'+str(package.css('a').attrib['href'])
-			pkg_version = str(package.xpath('./text()').get()).strip()
+			pkg_link = response.urljoin(pkg_link)
 			# execute insertion
-			c.execute(insert_query, (pkg_id, pkg_name, pkg_link, pkg_version))
-			# scrapy iterator
-			yield {
-				'name': pkg_name,
-				'link': pkg_link,
-				'version': pkg_version
-			}
-			
-		conn.commit()
-		conn.close()
+			# c.execute(insert_query, (pkg_id, pkg_name, pkg_link))
+
+			yield scrapy.Request(
+				url=pkg_link, 
+				callback=self.pkg_links_parse,
+				dont_filter=True,
+				meta={'pkg_id': pkg_id, 'pkg_name': pkg_name}
+			)
 		
-	def create_connection(self, db_file):
-		try:
-			conn = sqlite3.connect(db_file)
-			return conn
-		except:
-			print('Oops, DB connection failed...')
- 
-		return None
+	# yield Request from packages.debian.org
+	def pkg_links_parse(self, response):
+		tracker_link = str(response.xpath('//li/a[contains(text(),\'Developer Information\')]/@href').get(default=None)).strip()
+		metaparse = response.meta
+		metaparse['tracker_link'] = tracker_link
+
+		yield scrapy.Request(
+			url=tracker_link, 
+			callback=self.vcs_links_parse,
+			dont_filter=True,
+			meta=metaparse
+		)
+
+	# yield Request from tracker.debian.org/pkg
+	def vcs_links_parse(self, response):
+		vcs_link = str(response.xpath('//span/b[contains(text(), \'VCS:\')]/../following-sibling::a[1]/@href').get(default=None)).strip()
+
+		pkg_item = items.Package()
+		pkg_item['packageid'] = response.meta['pkg_id']
+		pkg_item['name'] = response.meta['pkg_name']
+		pkg_item['trackerlink'] =response.meta['tracker_link']
+		pkg_item['vcslink'] = vcs_link
+
+		yield pkg_item
