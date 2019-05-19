@@ -30,6 +30,7 @@ class MyspidersPipeline(object):
 
     def process_item(self, item, spider):
         self.cursor.execute(self.insert_query, (item['packageid'], item['name'], item['trackerlink'], item['vcslink']))
+        # self.connection.commit()
 
         return item
 

@@ -20,41 +20,55 @@ class DebianSpider(scrapy.Spider):
 	def parse(self, response):
 		pkg_id = 0
 		for package in response.css('dt'):
+			pkg_item = items.Package()
+			pkg_item['name'] = package.css('a::text').get()			
+			pkg_item['packageid'] = pkg_id
+			pkg_item['trackerlink'] = None
+			pkg_item['vcslink'] = None
+			
 			pkg_id += 1
-			pkg_name = package.css('a::text').get()
-			pkg_link = 'https://packages.debian.org/stable/'+str(package.css('a').attrib['href'])
-			pkg_link = response.urljoin(pkg_link)
-			# execute insertion
-			# c.execute(insert_query, (pkg_id, pkg_name, pkg_link))
+			pkg_link = package.css('a').attrib['href']
 
-			yield scrapy.Request(
-				url=pkg_link, 
-				callback=self.pkg_links_parse,
-				dont_filter=True,
-				meta={'pkg_id': pkg_id, 'pkg_name': pkg_name}
-			)
+			if pkg_link is not None:
+				pkg_link  = 'https://packages.debian.org/stable/'+str(pkg_link)
+
+				yield scrapy.Request(
+					url=pkg_link, 
+					callback=self.pkg_links_parse,
+					dont_filter=True,
+					meta={'pkg_item': pkg_item}
+				)
+			else:
+				yield pkg_item
 		
 	# yield Request from packages.debian.org
 	def pkg_links_parse(self, response):
-		tracker_link = str(response.xpath('//li/a[contains(text(),\'Developer Information\')]/@href').get(default=None)).strip()
-		metaparse = response.meta
-		metaparse['tracker_link'] = tracker_link
+		meta_item = response.meta['pkg_item']
 
-		yield scrapy.Request(
-			url=tracker_link, 
-			callback=self.vcs_links_parse,
-			dont_filter=True,
-			meta=metaparse
-		)
+		tracker_link = response.xpath('//li/a[contains(text(),\'Developer Information\')]/@href').get(default=None)
+		
+		if tracker_link is not None:
+			tracker_link = str(tracker_link).strip()
+			meta_item['trackerlink'] = tracker_link
+
+			yield scrapy.Request(
+				url=tracker_link, 
+				callback=self.vcs_links_parse,
+				dont_filter=True,
+				meta={'pkg_item': meta_item}
+			)
+		else:
+			yield meta_item
 
 	# yield Request from tracker.debian.org/pkg
 	def vcs_links_parse(self, response):
-		vcs_link = str(response.xpath('//span/b[contains(text(), \'VCS:\')]/../following-sibling::a[1]/@href').get(default=None)).strip()
+		meta_pkg_item = response.meta['pkg_item']
 
-		pkg_item = items.Package()
-		pkg_item['packageid'] = response.meta['pkg_id']
-		pkg_item['name'] = response.meta['pkg_name']
-		pkg_item['trackerlink'] =response.meta['tracker_link']
-		pkg_item['vcslink'] = vcs_link
+		# this only gets the first <a> element next to 'VCS' on tracker.debian.org, so the potential problem could be there is no VCS link but only a website for browse is available
+		vcs_link = response.xpath('//span/b[contains(text(), \'VCS:\')]/../following-sibling::a[1]/@href').get(default=None)
 
-		yield pkg_item
+		if vcs_link is not None:
+			vcs_link = str(vcs_link).strip()
+			meta_pkg_item['vcslink'] = vcs_link
+
+		yield meta_pkg_item
