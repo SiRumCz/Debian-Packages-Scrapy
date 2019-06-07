@@ -7,6 +7,3 @@ In the CLI use command
 | package id  |     name     |           tracker link          |                     vcs link                     |
 | ----------- | ------------ | ------------------------------- | ------------------------------------------------ |
 | primary key | package name | development information website | version control system website for local cloning |
-
-
-test repo  - 2
